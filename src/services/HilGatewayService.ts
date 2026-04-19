@@ -51,14 +51,30 @@ export class HilGatewayService {
       }
     }
 
-    // 6. Maker-Checker Segregation check (Strictest Governance)
+    // 6. Maker-Checker Segregation check via CanonicalRole Registry (Strictest Governance)
     if (taskConfig.segregationOfDutiesEnforced || ars?.governance.segregationOfDuties) {
-       if (intent.makerIdentity.toUpperCase().includes("REVIEWER") || intent.makerIdentity.toUpperCase().includes("ADMIN")) {
-          return { 
-            status: 'REJECTED_POLICY_VIOLATION', 
-            reason: `Restricted Identity Violation: '${intent.makerIdentity}' is reserved for human reviewers.` 
-          };
-       }
+      const makerRole = await prisma.canonicalRole.findUnique({
+        where: { id: intent.roleId },
+      });
+      const checkerRole = await prisma.canonicalRole.findFirst({
+        where: { tenantId: intent.tenantId, titleNormalized: 'CHECKER' },
+      });
+
+      // If the maker identity matches the checker identity, reject — SoD violation
+      if (checkerRole && intent.makerIdentity === (checkerRole as any).checkerIdentity) {
+        return {
+          status: 'REJECTED_POLICY_VIOLATION',
+          reason: `Segregation of Duties violation: maker cannot be checker.`,
+        };
+      }
+
+      // Fallback: block if roleRegistry indicates a restricted checker-only role
+      if (makerRole && (makerRole.titleNormalized.toUpperCase() === 'CHECKER')) {
+        return {
+          status: 'REJECTED_POLICY_VIOLATION',
+          reason: `Restricted Role Violation: '${makerRole.titleNormalized}' is a checker-only role and cannot initiate maker actions.`,
+        };
+      }
     }
 
     return { status: 'AUTO_APPROVED_FOR_EXECUTION' };

@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
 }
 
 model Tenant {
@@ -58,4 +58,14 @@ model ActionIntentQueue {
   fourEyesRequirementMet Boolean  @default(false)
   createdAt              DateTime @default(now())
   updatedAt              DateTime @updatedAt
+}
+
+model DriftLog {
+  id                 String   @id @default(cuid())
+  tenantId           String
+  driftScore         Float
+  hallucinationScore Float
+  context            Json?
+  createdAt          DateTime @default(now())
+  createdBy          String
 }

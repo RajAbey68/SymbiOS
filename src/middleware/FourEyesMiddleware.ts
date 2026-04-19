@@ -26,9 +26,12 @@ export const fourEyesMiddleware = (req: Request, res: Response, next: NextFuncti
 
   if (agentConfidence < MIN_CONFIDENCE) {
     console.warn(`[SymbiOS] [4-Eyes] HIL REQUIRED: Agent confidence ${agentConfidence} is below threshold ${MIN_CONFIDENCE}`);
-    // In a real system, this would trigger an HIL persistence event.
-    // For now, we flag the response to notify the consumer.
-    res.setHeader('x-symbios-hil-status', 'REQUIRED');
+    // Return 202 ACCEPTED (pending human review) — do NOT call next()
+    res.status(202).json({
+      status: 'PENDING_HUMAN_REVIEW',
+      message: 'Low confidence execution. Awaiting human approval.',
+    });
+    return; // CRITICAL: Do not call next()
   }
   
   console.log(`[SymbiOS] [4-Eyes] Request Protected: ${req.method} ${req.url}`);

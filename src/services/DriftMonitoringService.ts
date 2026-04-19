@@ -53,7 +53,19 @@ export class DriftMonitoringService {
 
   private async logDrift(metric: DriftMetric) {
     console.warn(`[SymbiOS] [DRIFT ALERT] [${metric.severity}] ${metric.metricType}: ${metric.details}`);
-    // Future work: Persist to a DriftLog table in Prisma
+    await prisma.driftLog.create({
+      data: {
+        tenantId: metric.tenantId,
+        driftScore: metric.value,
+        hallucinationScore: metric.metricType === 'HALLUCINATION' ? metric.value : 0,
+        context: {
+          metricType: metric.metricType,
+          severity: metric.severity,
+          details: metric.details,
+        },
+        createdBy: 'drift-monitor',
+      },
+    });
   }
 
   public async getTenantHealth(tenantId: string) {
