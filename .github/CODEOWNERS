@@ -1,0 +1,10 @@
+# 4-Eyes Governance Rule: Root level requires default approval from repo admin
+* @rajabey
+
+# Code & Agent logic requires specific Engineering review
+/src/ @engineering-leads
+
+# Strict compliance gating: EU AI Act relevant modules require compliance officer approval
+/policies/ @compliance-officers
+/models/ @ai-safety-committee
+/deployments/ @sec-ops

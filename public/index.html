@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SymbiOS | 4-Eyes Governance Dashboard</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="dashboard">
+        <aside class="sidebar">
+            <div class="logo">
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M12 2L2 7L12 12L22 7L12 2Z" stroke="url(#gradient)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    <path d="M2 17L12 22L22 17" stroke="url(#gradient)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    <path d="M2 12L12 17L22 12" stroke="url(#gradient)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    <defs>
+                        <linearGradient id="gradient" x1="2" y1="2" x2="22" y2="22" gradientUnits="userSpaceOnUse">
+                            <stop stop-color="#00d2ff"/>
+                            <stop offset="1" stop-color="#9d50bb"/>
+                        </linearGradient>
+                    </defs>
+                </svg>
+                SymbiOS
+            </div>
+            <nav>
+                <div class="nav-item active">
+                    <span>Pending Intents</span>
+                </div>
+                <div class="nav-item">
+                    <span>Audit Logs</span>
+                </div>
+                <div class="nav-item">
+                    <span>Policy Config</span>
+                </div>
+            </nav>
+            <div style="margin-top: auto; padding: 12px; font-size: 0.8rem; color: var(--text-secondary);">
+                v1.0.0 Compliance: EU AI Act
+            </div>
+        </aside>
+
+        <main class="main-content">
+            <header class="header">
+                <h1>Governance Control Plane</h1>
+                <p>Ensuring the 4-Eyes Principle for high-risk agentic actions.</p>
+            </header>
+
+            <section id="intent-queue" class="intent-grid">
+                <!-- Loaded via app.js -->
+                <div class="empty-state">
+                    Scanning for pending interventions...
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Notification system -->
+    <div id="toast-container" style="position: fixed; bottom: 20px; right: 20px; z-index: 1000;"></div>
+
+    <script src="app.js"></script>
+</body>
+</html>

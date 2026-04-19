@@ -1,0 +1,61 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model Tenant {
+  id             String          @id @default(uuid())
+  name           String
+  createdAt      DateTime        @default(now())
+  CanonicalRoles CanonicalRole[]
+}
+
+model CanonicalRole {
+  id                      String          @id @default(uuid())
+  tenantId                String
+  titleNormalized         String
+  department              String
+  notebookLmWorkspaceId   String?
+  primaryAccountabilities Json?
+  requiredJudgments       Json?
+  createdAt               DateTime        @default(now())
+  updatedAt               DateTime        @updatedAt
+  tenant                  Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tasks                   CanonicalTask[]
+}
+
+model CanonicalTask {
+  id                          String        @id @default(uuid())
+  tenantId                    String
+  roleId                      String
+  description                 String
+  automationClassification    String
+  opalWorkflowId              String?
+  requiresApproval            Boolean       @default(false)
+  approvalThresholdConfidence Float         @default(0.95)
+  segregationOfDutiesEnforced Boolean       @default(true)
+  dollarLimit                 Float?
+  stopSequenceTrigger         String?
+  createdAt                   DateTime      @default(now())
+  updatedAt                   DateTime      @updatedAt
+  role                        CanonicalRole @relation(fields: [roleId], references: [id], onDelete: Cascade)
+}
+
+model ActionIntentQueue {
+  id                     String   @id @default(uuid())
+  tenantId               String
+  roleId                 String
+  taskId                 String
+  proposedPayload        Json
+  confidenceScore        Float
+  makerIdentity          String
+  status                 String   @default("PENDING")
+  reviewReason           String?
+  checkerIdentity        String?
+  fourEyesRequirementMet Boolean  @default(false)
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+}

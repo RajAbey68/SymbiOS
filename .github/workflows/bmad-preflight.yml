@@ -1,0 +1,44 @@
+name: BMAD Preflight Analysis
+
+on:
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  preflight-checks:
+    name: Dependency & Stability Checks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '20'
+
+      - name: Install Dependencies
+        run: npm ci || npm install --no-fund --no-audit
+
+      - name: Security Audit (BMAD Baseline)
+        run: npm audit --audit-level=high
+
+      - name: Lint Analysis
+        run: npm run lint
+
+      - name: Unit Tests
+        run: npm run test
+
+      - name: Verify Fallback Operational State (BMAD Contract)
+        run: |
+          echo "Verifying blue/green configuration or fallback parameters in deployment manifests..."
+          mkdir -p ./deployments
+          # Mock script checking deployment config
+          if grep -rq "fallback_version\|blue_green_enabled" ./deployments/ 2>/dev/null; then
+            echo "BMAD rollback configuration detected. Passing preflight."
+            exit 0
+          else
+            echo "WARNING: No fallback/rollback configuration detected. This violates BMAD 'no breaking changes' standard."
+            echo "Forcing failure until deployment states are explicitly defined."
+            exit 1
+          fi

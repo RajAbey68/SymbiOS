@@ -1,0 +1,21 @@
+/Users/rajabey/.gemini/antigravity/scratch/SymbiOS/node_modules/ts-node/src/index.ts:859
+    return new TSError(diagnosticText, diagnosticCodes, diagnostics);
+           ^
+TSError: ⨯ Unable to compile TypeScript:
+[96msrc/prisma.config.ts[0m:[93m1[0m:[93m10[0m - [91merror[0m[90m TS2305: [0mModule '"@prisma/client"' has no exported member 'PrismaClient'.
+
+[7m1[0m import { PrismaClient } from '@prisma/client';
+[7m [0m [91m         ~~~~~~~~~~~~[0m
+
+    at createTSError (/Users/rajabey/.gemini/antigravity/scratch/SymbiOS/node_modules/ts-node/src/index.ts:859:12)
+    at reportTSError (/Users/rajabey/.gemini/antigravity/scratch/SymbiOS/node_modules/ts-node/src/index.ts:863:19)
+    at getOutput (/Users/rajabey/.gemini/antigravity/scratch/SymbiOS/node_modules/ts-node/src/index.ts:1077:36)
+    at Object.compile (/Users/rajabey/.gemini/antigravity/scratch/SymbiOS/node_modules/ts-node/src/index.ts:1433:41)
+    at Module.m._compile (/Users/rajabey/.gemini/antigravity/scratch/SymbiOS/node_modules/ts-node/src/index.ts:1617:30)
+    at node:internal/modules/cjs/loader:1706:10
+    at Object.require.extensions.<computed> [as .ts] (/Users/rajabey/.gemini/antigravity/scratch/SymbiOS/node_modules/ts-node/src/index.ts:1621:12)
+    at Module.load (node:internal/modules/cjs/loader:1289:32)
+    at Function._load (node:internal/modules/cjs/loader:1108:12)
+    at TracingChannel.traceSync (node:diagnostics_channel:322:14) {
+  diagnosticCodes: [ 2305 ]
+}

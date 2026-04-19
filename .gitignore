@@ -1,0 +1,20 @@
+node_modules/
+
+# Environment variables — never commit secrets
+.env
+.env.docker
+
+# Build output
+dist/
+build/
+
+# Local SQLite database (development only)
+dev.db
+*.db
+
+# TypeScript compiler output
+tsc_output.txt
+*.tsbuildinfo
+
+# Prisma generated client
+/src/generated/prisma

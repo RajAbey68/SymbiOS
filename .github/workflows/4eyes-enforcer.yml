@@ -1,0 +1,32 @@
+name: 4-Eyes Principle Enforcer
+
+on:
+  pull_request_review:
+    types: [submitted, edited, dismissed]
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  enforce-4-eyes:
+    name: Verify 4-Eyes Governance
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check PR Approvals
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const { data: reviews } = await github.rest.pulls.listReviews({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.issue.number,
+            });
+            const approvedReviews = reviews.filter(r => r.state === 'APPROVED');
+            const uniqueApprovers = new Set(approvedReviews.map(r => r.user.login));
+            
+            console.log(`Found ${uniqueApprovers.size} unique approver(s).`);
+            
+            if (uniqueApprovers.size < 2) {
+              core.setFailed(`The 4-Eyes Principle requires 2 distinct approvals. Currently found: ${uniqueApprovers.size}`);
+            } else {
+              core.info('4-Eyes Principle met. 2+ approvals detected.');
+            }
