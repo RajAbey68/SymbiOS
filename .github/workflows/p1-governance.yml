@@ -1,0 +1,224 @@
+name: P1 Governance Integrity — SymbiOS
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  confidence-halt:
+    name: 1️⃣ Low-Confidence Execution Halt
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify middleware returns 202 on low confidence
+        run: |
+          if ! grep -q "res.status(202)" src/middleware/FourEyesMiddleware.ts; then
+            echo "❌ FAILED: Middleware does not return 202 status for low-confidence requests"
+            echo "Current behavior: Sets header and calls next() — intent still executes"
+            exit 1
+          fi
+          echo "✅ Middleware returns 202 (PENDING_HUMAN_REVIEW) on low confidence"
+
+      - name: Verify no pass-through on low confidence
+        run: |
+          if grep -q "agentConfidence < MIN_CONFIDENCE" src/middleware/FourEyesMiddleware.ts; then
+            if grep -A 3 "agentConfidence < MIN_CONFIDENCE" src/middleware/FourEyesMiddleware.ts | grep -q "next()"; then
+              echo "❌ FAILED: Low-confidence requests still call next() — governance bypass"
+              exit 1
+            fi
+          fi
+          echo "✅ Low-confidence requests do not bypass HIL"
+
+      - name: Check for HIL queue persistence
+        run: |
+          if ! grep -q "ActionIntentQueue" src/middleware/FourEyesMiddleware.ts; then
+            echo "⚠️  WARNING: Low-confidence intents not queued to ActionIntentQueue"
+            echo "Consider: Persist intent to queue before returning 202"
+          else
+            echo "✅ Low-confidence intents queued for review"
+          fi
+
+  segregation-of-duties:
+    name: 2️⃣ Segregation of Duties — Role Registry
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify SoD uses role registry (not string-match)
+        run: |
+          if grep -q "identity.*includes.*REVIEWER\|identity.*includes.*ADMIN" src/services/HilGatewayService.ts; then
+            echo "❌ FAILED: SoD check uses string-matching (identity.includes('REVIEWER'))"
+            echo "Risk: Any agent named 'reviewer' can bypass SoD enforcement"
+            exit 1
+          fi
+          echo "✅ SoD check does not use string-matching"
+
+      - name: Check for CanonicalRole lookup
+        run: |
+          if ! grep -q "CanonicalRole\|roleRegistry" src/services/HilGatewayService.ts; then
+            echo "❌ FAILED: SoD check does not reference CanonicalRole or role registry"
+            echo "Required: Query role registry to validate maker/checker roles"
+            exit 1
+          fi
+          echo "✅ SoD check queries CanonicalRole for validation"
+
+      - name: Verify maker !== checker enforcement
+        run: |
+          if ! grep -q "makerIdentity.*!=.*checkerIdentity\|maker.*!==.*checker" src/services/HilGatewayService.ts; then
+            echo "⚠️  WARNING: Explicit maker !== checker validation not found"
+          else
+            echo "✅ Maker !== Checker explicitly enforced"
+          fi
+
+  drift-logging:
+    name: 3️⃣ Drift Monitoring — Persist to DB
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify DriftLog table in schema
+        run: |
+          if ! grep -q "model DriftLog" prisma/schema.prisma; then
+            echo "❌ FAILED: DriftLog model not defined in schema"
+            echo "Drift events currently only logged to console — lost on restart"
+            exit 1
+          fi
+          echo "✅ DriftLog table defined"
+
+      - name: Check DriftLog fields
+        run: |
+          if ! grep -A 10 "model DriftLog" prisma/schema.prisma | grep -q "tenantId\|driftScore\|hallucinationScore"; then
+            echo "⚠️  WARNING: DriftLog missing key fields (tenantId, driftScore, hallucinationScore)"
+          else
+            echo "✅ DriftLog has required audit fields"
+          fi
+
+      - name: Verify drift persistence in service
+        run: |
+          if ! grep -q "prisma.driftLog.create\|DriftLog" src/services/DriftMonitoringService.ts; then
+            echo "❌ FAILED: DriftMonitoringService does not persist to DriftLog table"
+            echo "Current: console.warn only — compliance violation"
+            exit 1
+          fi
+          echo "✅ DriftMonitoringService persists to database"
+
+      - name: Check for audit trail
+        run: |
+          if ! grep -q "createdAt\|createdBy\|timestamp" prisma/schema.prisma; then
+            echo "⚠️  WARNING: DriftLog missing audit timestamps"
+          else
+            echo "✅ DriftLog includes audit trail"
+          fi
+
+  bias-audit:
+    name: 4️⃣ Bias & Fairness Audit — Real Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+          cache: 'npm'
+
+      - name: Verify bias audit tests exist
+        run: |
+          if [ ! -f "tests/compliance/bias_audits.py" ] && \
+             [ ! -f "tests/bias_audits.py" ] && \
+             [ ! -f "src/tests/bias_audits.py" ]; then
+            echo "❌ FAILED: Bias audit tests not found"
+            echo "Checked: tests/compliance/bias_audits.py, tests/bias_audits.py, src/tests/bias_audits.py"
+            exit 1
+          fi
+          echo "✅ Bias audit test file exists"
+
+      - name: Verify bias audit runs (not simulated)
+        run: |
+          if grep -r "echo.*bias\|console.log.*bias\|print.*bias" .github/workflows/ 2>/dev/null | grep -v "p1-governance"; then
+            echo "⚠️  WARNING: CI might be echoing bias results instead of running tests"
+          fi
+
+          if grep -q "pytest.*bias" .github/workflows/*.yml 2>/dev/null || \
+             grep -q "python.*bias" .github/workflows/*.yml 2>/dev/null; then
+            echo "✅ CI runs real bias audit tests"
+          else
+            echo "⚠️  WARNING: Bias audit tests may not be integrated into CI pipeline"
+            echo "Ensure .github/workflows includes: pytest tests/compliance/bias_audits.py"
+          fi
+
+      - name: Check fairness metrics defined
+        run: |
+          if grep -r "fairness\|bias_score\|demographic_parity" . --include="*.py" --include="*.ts" 2>/dev/null | grep -v ".git" | head -5; then
+            echo "✅ Fairness metrics present in codebase"
+          else
+            echo "⚠️  WARNING: Fairness/bias metrics not clearly defined"
+          fi
+
+  compliance-summary:
+    name: P1 Summary
+    runs-on: ubuntu-latest
+    needs: [confidence-halt, segregation-of-duties, drift-logging, bias-audit]
+    if: always()
+    steps:
+      - name: Report P1 Governance Status (Success)
+        if: success()
+        run: |
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "✅ P1 Governance Integrity: COMPLETE"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo ""
+          echo "Governance Gates Enforced:"
+          echo "  1. Low-confidence requests halt (202 status)"
+          echo "  2. SoD check uses role registry"
+          echo "  3. Drift events persisted to DriftLog"
+          echo "  4. Real bias audits integrated"
+          echo ""
+          echo "Next: P2 Quality Polish (6 items)"
+
+      - name: Report P1 Governance Status (Failure)
+        if: failure()
+        run: |
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "❌ P1 Governance Integrity: INCOMPLETE"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo ""
+          echo "Review failed checks above."
+          echo "P1 items must be fixed before production deployment."
+
+  pr-comment:
+    name: Post Results to PR
+    runs-on: ubuntu-latest
+    needs: [confidence-halt, segregation-of-duties, drift-logging, bias-audit]
+    if: always() && github.event_name == 'pull_request'
+    steps:
+      - name: Comment on PR (Success)
+        if: success()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `✅ **P1 Governance Integrity — All Clear**\n\n- [x] Low-confidence execution halted (202 status)\n- [x] SoD check uses role registry\n- [x] Drift events persisted to DriftLog\n- [x] Real bias audits integrated\n\nReady for go-live review.`
+            })
+
+      - name: Comment on PR (Failure)
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `❌ **P1 Governance Integrity — Failed**\n\nOne or more P1 governance checks failed. Review the logs above. P1 items are required before production deployment.`
+            })

@@ -1,0 +1,196 @@
+name: P0 Blockers — SymbiOS Governance Gates
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  prisma-generation:
+    name: 1️⃣ Prisma Client Generation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma Client
+        run: npx prisma generate
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/symbios_test
+
+      - name: Verify Prisma Client generated
+        run: |
+          if [ ! -d "node_modules/.prisma/client" ]; then
+            echo "❌ FAILED: Prisma client not generated"
+            exit 1
+          fi
+          echo "✅ Prisma client generated successfully"
+
+  typecheck:
+    name: 2️⃣ TypeScript Compilation
+    runs-on: ubuntu-latest
+    needs: prisma-generation
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma Client
+        run: npx prisma generate
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/symbios_test
+
+      - name: Type check
+        run: npx tsc --noEmit
+
+      - name: Report success
+        if: success()
+        run: echo "✅ TypeScript compilation successful — no errors"
+
+  schema-validation:
+    name: 3️⃣ Database Schema Validation
+    runs-on: ubuntu-latest
+    needs: prisma-generation
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: symbios_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma Client
+        run: npx prisma generate
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/symbios_test
+
+      - name: Validate schema compiles
+        run: npx prisma validate
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/symbios_test
+
+      - name: Test PostgreSQL connection
+        run: npx prisma db execute --stdin < <(echo "SELECT 1;")
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/symbios_test
+
+      - name: Report success
+        if: success()
+        run: echo "✅ Database schema valid — PostgreSQL connection confirmed"
+
+  governance-checks:
+    name: 4️⃣ Governance Enforcement
+    runs-on: ubuntu-latest
+    needs: [prisma-generation, typecheck]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check FourEyesMiddleware exists
+        run: |
+          if [ ! -f "src/middleware/FourEyesMiddleware.ts" ]; then
+            echo "❌ FAILED: FourEyesMiddleware.ts missing"
+            exit 1
+          fi
+          echo "✅ FourEyesMiddleware.ts present"
+
+      - name: Verify ARS schema defined
+        run: |
+          if [ ! -f "src/types/ARS.ts" ]; then
+            echo "❌ FAILED: ARS.ts (Agent Requirement Specification) missing"
+            exit 1
+          fi
+          echo "✅ ARS.ts schema defined"
+
+      - name: Check HIL gateway service
+        run: |
+          if [ ! -f "src/services/HilGatewayService.ts" ]; then
+            echo "❌ FAILED: HilGatewayService.ts missing"
+            exit 1
+          fi
+          echo "✅ HIL gateway service present"
+
+      - name: Verify ActionIntentQueue model exists
+        run: |
+          if ! grep -q "model ActionIntentQueue" prisma/schema.prisma; then
+            echo "❌ FAILED: ActionIntentQueue not defined in schema"
+            exit 1
+          fi
+          echo "✅ ActionIntentQueue model defined"
+
+      - name: Report governance status
+        if: success()
+        run: |
+          echo "✅ All P0 governance gates passing"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "P0 Status: READY FOR DEPLOYMENT"
+          echo "Remaining blockers: P1 (6 items), P2 (6 items)"
+
+  pr-comment:
+    name: Post Results to PR
+    runs-on: ubuntu-latest
+    needs: [prisma-generation, typecheck, schema-validation, governance-checks]
+    if: always() && github.event_name == 'pull_request'
+    steps:
+      - name: Comment on PR (Success)
+        if: success()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `✅ **P0 Blockers — All Clear**\n\n- [x] Prisma client generated\n- [x] TypeScript compilation\n- [x] PostgreSQL schema validation\n- [x] Governance gates\n\nReady for merge.`
+            })
+
+      - name: Comment on PR (Failure)
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `❌ **P0 Blockers — Failed**\n\nOne or more P0 checks failed. Review the workflow logs above for details.`
+            })
